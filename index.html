@@ -172,15 +172,15 @@
 <h3 id="1-让动态页面执行shell文件，而不是perl"><a href="#1-让动态页面执行shell文件，而不是perl" class="headerlink" title="1 让动态页面执行shell文件，而不是perl"></a>1 让动态页面执行shell文件，而不是perl</h3><p>由于自己没有学习过除了shell之外的其他脚本语言，为了实现功能扩展，特此将tinyhttp中用Perl编写的<code>color.cgi</code>程序替换为shell程序，在此基础上并在shell程序上实现功能。具体实现如下</p>
 <h4 id="1-1-首先编写基础版本的color-sh"><a href="#1-1-首先编写基础版本的color-sh" class="headerlink" title="1.1 首先编写基础版本的color.sh"></a>1.1 首先编写基础版本的color.sh</h4><p>我们知道tinyhttpd中<code>color.cgi</code>的程序其实就是传输一个服务器响应消息给浏览器，由于<code>httpd.c</code>中已经在子进程中将<code>color.cgi</code>中的<code>pipe</code>的输入输出重定向到标准输入与输出，因此，<code>color.cgi</code>实现的功能其实就是将服务器响应消息通过标准输出输出，这样就可以返回相应的信息给浏览器。因此，我们的<code>color.sh</code>也是实现相应的功能，将服务器响应消息组合发送到标准输出，基础版本的代码也很简单，具体实现如下</p>
 <p>最简单的shell代码</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"blue\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is blue&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span>!/bin/bash</div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"blue\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is blue&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
 <p>测试: 此时在linux中通过浏览器访问<code>127.0.0.1:4000/color.sh</code>.我们会发现已经可以跳转到改变颜色的页面。这只是最基础的版本，只能通过浏览器输入整个信息才可以访问，而不可以通过<code>index.html</code>实现表单跳转。为此我们对基础版本的代码进行改进</p>
 <h4 id="1-2-改进版的shell代码"><a href="#1-2-改进版的shell代码" class="headerlink" title="1.2 改进版的shell代码"></a>1.2 改进版的shell代码</h4><p>​    在<code>httpd.c</code>中已经设置了环境变量，读取环境变量<code>QUERY_STRING</code>,一般里面的内容是<code>color=red</code>等，我们将该环境变量进行切割就可以找到相应的<code>color.sh</code>具体代码如下</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line"><span class="meta">#</span><span class="bash">color=red</span></div><div class="line"></div><div class="line">color=$&#123;QUERY_STRING:6&#125;</div><div class="line"></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"$&#123;color&#125;\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is $&#123;color&#125;&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span>!/bin/bash</div><div class="line"><span class="meta">#</span>color=red</div><div class="line"></div><div class="line">color=$&#123;QUERY_STRING:6&#125;</div><div class="line"></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"$&#123;color&#125;\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is $&#123;color&#125;&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
 <p>​    此时我们在浏览器中访问<code>http://127.0.0.1:4000/color.sh?color=yellow</code>就可以跳转到相应颜色的页面。如果我们要实现从<code>index.html</code>中跳转的话就要对进行更改，如下所示</p>
 <figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">HTML</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">TITLE</span>&gt;</span>Index<span class="tag">&lt;/<span class="name">TITLE</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">BODY</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">P</span>&gt;</span>Welcome to J. David's webserver.</div><div class="line"><span class="tag">&lt;<span class="name">H1</span>&gt;</span>CGI demo</div><div class="line"><span class="tag">&lt;<span class="name">FORM</span> <span class="attr">ACTION</span>=<span class="string">"color.sh"</span> <span class="attr">METHOD</span>=<span class="string">"GET"</span>&gt;</span></div><div class="line">Enter a color: <span class="tag">&lt;<span class="name">INPUT</span> <span class="attr">TYPE</span>=<span class="string">"text"</span> <span class="attr">NAME</span>=<span class="string">"color"</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">INPUT</span> <span class="attr">TYPE</span>=<span class="string">"submit"</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">FORM</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">BODY</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">HTML</span>&gt;</span></div></pre></td></tr></table></figure>
 <p>​    此时，通过<code>http://127.0.0.1:4000</code>我们就可以通过按键，提交表单，通过我们的<code>color.sh</code>实现颜色页面的跳转。不过这是通过<code>GET</code>实现的，不过我们暂时就实现了自己的shell脚本功能。<code>POST</code>等其他方面的请求下面会有涉及，此刻，我们的shell程序就成功实现了。</p>
 <h4 id="1-3-让shell程序支持GET和POST"><a href="#1-3-让shell程序支持GET和POST" class="headerlink" title="1.3 让shell程序支持GET和POST"></a>1.3 让shell程序支持GET和POST</h4><p>具体代码也很简单，简单分析一下: 如果是<code>GET</code>，则从环境变量中截取相应的参数。如果是<code>POST</code>，则通过标准输入读取父进程管道传过来的参数。为了过滤掉标准换行的影响，故读取大小为<code>CONTENT_LENGH</code>的参数赋给<code>color_string</code>,然后再截取相应的参数。具体代码如下</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">if [ $&#123;REQUEST_METHOD&#125; = "get" -o $&#123;REQUEST_METHOD&#125; = "GET" ] </div><div class="line">then</div><div class="line">	color=$&#123;QUERY_STRING:6&#125;</div><div class="line">elif [ $&#123;REQUEST_METHOD&#125; = "post" -o $&#123;REQUEST_METHOD&#125; = "POST" ]</div><div class="line">then</div><div class="line">	read -n $&#123;CONTENT_LENGTH&#125; color_string</div><div class="line">	color=$&#123;color_string:6&#125;</div><div class="line">fi</div><div class="line"></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"$&#123;color&#125;\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is $&#123;color&#125;&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span>!/bin/bash</div><div class="line">if [ $&#123;REQUEST_METHOD&#125; = "get" -o $&#123;REQUEST_METHOD&#125; = "GET" ] </div><div class="line">then</div><div class="line">	color=$&#123;QUERY_STRING:6&#125;</div><div class="line">elif [ $&#123;REQUEST_METHOD&#125; = "post" -o $&#123;REQUEST_METHOD&#125; = "POST" ]</div><div class="line">then</div><div class="line">	read -n $&#123;CONTENT_LENGTH&#125; color_string</div><div class="line">	color=$&#123;color_string:6&#125;</div><div class="line">fi</div><div class="line"></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"$&#123;color&#125;\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is $&#123;color&#125;&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
 <p>改动完之后，我们将<code>index.html</code>中的<code>GET</code>改为<code>POST</code>，再通过浏览器访问，此时我们的shell程序已经可以完美替代color.cgi，并且还支持<code>GET</code>和<code>POST</code>方法</p>
 <h3 id="2-添加其他MIME格式"><a href="#2-添加其他MIME格式" class="headerlink" title="2 添加其他MIME格式"></a>2 添加其他MIME格式</h3><p>如果我们想通过tinyhttpd访问图片、音频或者视频，tinyhttpd支持吗？为此我们测试一下，拷贝一些图片或者音视频到<code>htdocs</code>目录下，比如说拷贝<code>123.png</code>到该目录下，然后通过浏览器访问<code>127.0.0.1::4000/123.png</code>。然后我们会发现图片显示不了，浏览器打印</p>
 <p><code>The image &quot;httpd://127.0.0.1:4000/123.png&quot; cannog be displayer because it contains errors.</code></p>
@@ -206,7 +206,7 @@
 <p>当访问的是根路径是，tinyhttpd直接将<code>path</code>指向<code>index.htm</code>,而没有判断<code>index.html</code>是否存在，为此，我们将上述代码进行改动。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span>(path[<span class="built_in">strlen</span>(path) - <span class="number">1</span>] == <span class="string">'/'</span>)</div><div class="line">&#123;</div><div class="line">  <span class="built_in">strcat</span>(path, <span class="string">"index.html"</span>);</div><div class="line">  <span class="keyword">if</span>(access(paht, F_OK) == <span class="number">-1</span>)</div><div class="line">  &#123;</div><div class="line">    <span class="built_in">strcpy</span>(path, <span class="string">"htdocs/getdirlist.sh);</span></div><div class="line"><span class="string">    cgi = 1;</span></div><div class="line"><span class="string">  &#125;</span></div><div class="line"><span class="string">&#125;</span></div></pre></td></tr></table></figure>
 <p>这段代码的意思是，如果是访问的是根目录的话，判断根目录下是否存在<code>index.html</code>，若存在，将<code>path</code>定向到<code>index.html</code>。如果不存在，则访问根目录下的<code>getdirlist.sh</code>文件。<code>getdirlist.sh</code>是我们自己编写的，其代码如下</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">echo "Content-Type: text/html; charset=ISO-8859-1"</div><div class="line">echo ""</div><div class="line"></div><div class="line">dirlist = `ls ./htdocs`</div><div class="line">for var in $&#123;dirlist&#125;</div><div class="line">do</div><div class="line">	echo "&lt;td&gt;&lt;a href=\"$&#123;var&#125;\"&gt;$&#123;var&#125;&lt;/a&gt;&lt;/td?"</div><div class="line">done</div></pre></td></tr></table></figure>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span>!/bin/bash</div><div class="line">echo "Content-Type: text/html; charset=ISO-8859-1"</div><div class="line">echo ""</div><div class="line"></div><div class="line">dirlist = `ls ./htdocs`</div><div class="line">for var in $&#123;dirlist&#125;</div><div class="line">do</div><div class="line">	echo "&lt;td&gt;&lt;a href=\"$&#123;var&#125;\"&gt;$&#123;var&#125;&lt;/a&gt;&lt;/td?"</div><div class="line">done</div></pre></td></tr></table></figure>
 <p>此时，我们将<code>htdocs</code>目录下的<code>index.html</code>去掉，去访问<code>127.0.0.1:4000</code>就可以看到<code>htdocs</code>目录下的文件列表了。但是，现在只实现，访问<code>htdocs</code>目录下的文件，如果该目录下有文件夹的话，点击该文件夹是无法跳转的。为此，我们继续改进。</p>
 <h4 id="3-2-让我们的getdirlish-sh支持文件夹跳转"><a href="#3-2-让我们的getdirlish-sh支持文件夹跳转" class="headerlink" title="3.2 让我们的getdirlish.sh支持文件夹跳转"></a>3.2 让我们的getdirlish.sh支持文件夹跳转</h4><p>和访问根目录一样，首先判断是否是文件夹时，判断一下该文件夹下是否含有<code>index.html</code>,存在的话，则访问，不存在的话，则打印文件列表，改动后的函数如下</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> ((st.st_mode &amp; S_IFMT) == S_IFDIR)</div><div class="line">&#123;</div><div class="line">    <span class="built_in">strcat</span>(path, <span class="string">"/index.html"</span>);</div><div class="line">	<span class="keyword">if</span>(access(path, F_OK) == <span class="number">-1</span>)</div><div class="line">	&#123;</div><div class="line">		<span class="built_in">strcpy</span>(path, <span class="string">"htdocs/getdirlist.sh"</span>);</div><div class="line">		cgi = <span class="number">1</span>;</div><div class="line">	&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
@@ -217,7 +217,7 @@
 <p>然后在<code>execute_cgi</code>中<code>if(pid == 0)</code>分支里面添加下面的语句，主要功能是，传递<code>url</code>的路径给环境变量</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">char</span> path_env[<span class="number">255</span>];</div><div class="line"><span class="built_in">sprintf</span>(path_env, <span class="string">"PATH_INFO=%s"</span>, url);</div><div class="line">putenv(path_env);</div></pre></td></tr></table></figure>
 <p>最后再改动我们的<code>getdirlist.sh</code></p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">echo "Content-Type: text/html; charset=ISO-8859-1"</div><div class="line">echo ""</div><div class="line"></div><div class="line">dirlist=`ls ./htdocs$&#123;PATH_INFO&#125;`</div><div class="line">for var in $&#123;dirlist&#125;</div><div class="line">do</div><div class="line">	echo "&lt;td&gt;&lt;a href=\"$&#123;var&#125;\"&gt;$&#123;var&#125;&lt;/a&gt;&lt;/td&gt;"</div><div class="line">done</div></pre></td></tr></table></figure>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span>!/bin/bash</div><div class="line">echo "Content-Type: text/html; charset=ISO-8859-1"</div><div class="line">echo ""</div><div class="line"></div><div class="line">dirlist=`ls ./htdocs$&#123;PATH_INFO&#125;`</div><div class="line">for var in $&#123;dirlist&#125;</div><div class="line">do</div><div class="line">	echo "&lt;td&gt;&lt;a href=\"$&#123;var&#125;\"&gt;$&#123;var&#125;&lt;/a&gt;&lt;/td&gt;"</div><div class="line">done</div></pre></td></tr></table></figure>
 <p>此时我们的<code>getdirlist.sh</code>就支持文件跳转功能了，此时基本的文件夹跳转功能就实现了。</p>
 
       
@@ -243,139 +243,6 @@
       
         <p class="article-more-link">
           <a class="article-more-a" href="/2017/09/03/基于tinyhttpd的测试与功能扩展/">展开全文 >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-test-my-site" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/08/22/test-my-site/">test_my_site</a>
-    </h1>
-  
-
-        
-        <a href="/2017/08/22/test-my-site/" class="archive-article-date">
-  	<time datetime="2017-08-22T14:54:29.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-08-22</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2017/08/22/test-my-site/">展开全文 >></a>
-        </p>
-      
-
-      
-      <div class="clearfix"></div>
-    </div>
-  </div>
-</article>
-
-<aside class="wrap-side-operation">
-    <div class="mod-side-operation">
-        
-        <div class="jump-container" id="js-jump-container" style="display:none;">
-            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
-                <i class="icon-font icon-back"></i>
-            </a>
-            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
-                <i class="icon-font icon-plane jump-plane"></i>
-            </div>
-        </div>
-        
-        
-    </div>
-</aside>
-
-
-
-
-  
-    <article id="post-hello-world" class="article article-type-post  article-index" itemscope itemprop="blogPost">
-  <div class="article-inner">
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/08/22/hello-world/">Hello World</a>
-    </h1>
-  
-
-        
-        <a href="/2017/08/22/hello-world/" class="archive-article-date">
-  	<time datetime="2017-08-22T14:50:35.700Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-08-22</time>
-</a>
-        
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="external">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="external">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="external">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="external">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo new <span class="string">"My New Post"</span></div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="external">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo server</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="external">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo generate</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="external">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo deploy</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="external">Deployment</a></p>
-
-      
-
-      
-    </div>
-    <div class="article-info article-info-index">
-      
-      
-      
-
-      
-        <p class="article-more-link">
-          <a class="article-more-a" href="/2017/08/22/hello-world/">展开全文 >></a>
         </p>
       
 
