@@ -135,6 +135,143 @@
           <div id="js-content" class="content-ll">
             
   
+    <article id="post-基于tinyhttpd的测试与功能扩展" class="article article-type-post  article-index" itemscope itemprop="blogPost">
+  <div class="article-inner">
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/09/03/基于tinyhttpd的测试与功能扩展/">基于tinyhttpd的测试与功能扩展</a>
+    </h1>
+  
+
+        
+        <a href="/2017/09/03/基于tinyhttpd的测试与功能扩展/" class="archive-article-date">
+  	<time datetime="2017-09-03T13:15:41.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-09-03</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h3 id="基于tinyhttpd的测试与功能扩展"><a href="#基于tinyhttpd的测试与功能扩展" class="headerlink" title="基于tinyhttpd的测试与功能扩展"></a>基于tinyhttpd的测试与功能扩展</h3><blockquote>
+<p>tinyhttpd是一个不到500行的超轻量型 Http Server，用来学习非常不错，可以帮助我们真正理解服务器程序的本质                                                        –tinyhttpd github</p>
+</blockquote>
+<p>​    在读完tinyhttpd之后，对于http协议的传输理解更深了。为了理解更加深刻，本文旨在linux环境下对tinyhttpd进行更改测试以及功能扩展。</p>
+<h4 id="官方文档的BUG"><a href="#官方文档的BUG" class="headerlink" title="官方文档的BUG?"></a>官方文档的BUG?</h4><p>如何在linux(ubuntu)中运行tinyhttpd?首先，根据官方的README文档对相应的代码进行改动之后，但是在我的linux系统中，编译会有警告，提示下面这句代码有问题</p>
+<p><code>execl(path, NULL);</code></p>
+<p>可能运行系统不同，在linux中根据系统execl的使用参数问题，要改为下面这样才没有警告</p>
+<p><code>execl(path, path, NULL);</code></p>
+<p>此时编译没有警告，但运行时浏览器没有信息返回。此时，我们还需要改动一行代码，具体如下</p>
+<p>在原来accept_request函数中第一行代码是这样子的</p>
+<p><code>int client = (intptr_t)arg;</code></p>
+<p>可能类型不兼容，导致在linux中无法正确运行。所以，我们把这行代码改为下面的就可以了</p>
+<p><code>int client = *(int * )arg;</code></p>
+<p>此时，通过浏览器访问<code>127.0.0.1:4000</code>就可以看到html页面了</p>
+<h3 id="1-让动态页面执行shell文件，而不是perl"><a href="#1-让动态页面执行shell文件，而不是perl" class="headerlink" title="1 让动态页面执行shell文件，而不是perl"></a>1 让动态页面执行shell文件，而不是perl</h3><p>由于自己没有学习过除了shell之外的其他脚本语言，为了实现功能扩展，特此将tinyhttp中用Perl编写的<code>color.cgi</code>程序替换为shell程序，在此基础上并在shell程序上实现功能。具体实现如下</p>
+<h4 id="1-1-首先编写基础版本的color-sh"><a href="#1-1-首先编写基础版本的color-sh" class="headerlink" title="1.1 首先编写基础版本的color.sh"></a>1.1 首先编写基础版本的color.sh</h4><p>我们知道tinyhttpd中<code>color.cgi</code>的程序其实就是传输一个服务器响应消息给浏览器，由于<code>httpd.c</code>中已经在子进程中将<code>color.cgi</code>中的<code>pipe</code>的输入输出重定向到标准输入与输出，因此，<code>color.cgi</code>实现的功能其实就是将服务器响应消息通过标准输出输出，这样就可以返回相应的信息给浏览器。因此，我们的<code>color.sh</code>也是实现相应的功能，将服务器响应消息组合发送到标准输出，基础版本的代码也很简单，具体实现如下</p>
+<p>最简单的shell代码</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"blue\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is blue&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
+<p>测试: 此时在linux中通过浏览器访问<code>127.0.0.1:4000/color.sh</code>.我们会发现已经可以跳转到改变颜色的页面。这只是最基础的版本，只能通过浏览器输入整个信息才可以访问，而不可以通过<code>index.html</code>实现表单跳转。为此我们对基础版本的代码进行改进</p>
+<h4 id="1-2-改进版的shell代码"><a href="#1-2-改进版的shell代码" class="headerlink" title="1.2 改进版的shell代码"></a>1.2 改进版的shell代码</h4><p>​    在<code>httpd.c</code>中已经设置了环境变量，读取环境变量<code>QUERY_STRING</code>,一般里面的内容是<code>color=red</code>等，我们将该环境变量进行切割就可以找到相应的<code>color.sh</code>具体代码如下</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line"><span class="meta">#</span><span class="bash">color=red</span></div><div class="line"></div><div class="line">color=$&#123;QUERY_STRING:6&#125;</div><div class="line"></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"$&#123;color&#125;\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is $&#123;color&#125;&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
+<p>​    此时我们在浏览器中访问<code>http://127.0.0.1:4000/color.sh?color=yellow</code>就可以跳转到相应颜色的页面。如果我们要实现从<code>index.html</code>中跳转的话就要对进行更改，如下所示</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">HTML</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">TITLE</span>&gt;</span>Index<span class="tag">&lt;/<span class="name">TITLE</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">BODY</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">P</span>&gt;</span>Welcome to J. David's webserver.</div><div class="line"><span class="tag">&lt;<span class="name">H1</span>&gt;</span>CGI demo</div><div class="line"><span class="tag">&lt;<span class="name">FORM</span> <span class="attr">ACTION</span>=<span class="string">"color.sh"</span> <span class="attr">METHOD</span>=<span class="string">"GET"</span>&gt;</span></div><div class="line">Enter a color: <span class="tag">&lt;<span class="name">INPUT</span> <span class="attr">TYPE</span>=<span class="string">"text"</span> <span class="attr">NAME</span>=<span class="string">"color"</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">INPUT</span> <span class="attr">TYPE</span>=<span class="string">"submit"</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">FORM</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">BODY</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">HTML</span>&gt;</span></div></pre></td></tr></table></figure>
+<p>​    此时，通过<code>http://127.0.0.1:4000</code>我们就可以通过按键，提交表单，通过我们的<code>color.sh</code>实现颜色页面的跳转。不过这是通过<code>GET</code>实现的，不过我们暂时就实现了自己的shell脚本功能。<code>POST</code>等其他方面的请求下面会有涉及，此刻，我们的shell程序就成功实现了。</p>
+<h4 id="1-3-让shell程序支持GET和POST"><a href="#1-3-让shell程序支持GET和POST" class="headerlink" title="1.3 让shell程序支持GET和POST"></a>1.3 让shell程序支持GET和POST</h4><p>具体代码也很简单，简单分析一下: 如果是<code>GET</code>，则从环境变量中截取相应的参数。如果是<code>POST</code>，则通过标准输入读取父进程管道传过来的参数。为了过滤掉标准换行的影响，故读取大小为<code>CONTENT_LENGH</code>的参数赋给<code>color_string</code>,然后再截取相应的参数。具体代码如下</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">if [ $&#123;REQUEST_METHOD&#125; = "get" -o $&#123;REQUEST_METHOD&#125; = "GET" ] </div><div class="line">then</div><div class="line">	color=$&#123;QUERY_STRING:6&#125;</div><div class="line">elif [ $&#123;REQUEST_METHOD&#125; = "post" -o $&#123;REQUEST_METHOD&#125; = "POST" ]</div><div class="line">then</div><div class="line">	read -n $&#123;CONTENT_LENGTH&#125; color_string</div><div class="line">	color=$&#123;color_string:6&#125;</div><div class="line">fi</div><div class="line"></div><div class="line">echo "Content-Type: text/html; charset=IOS-8869-1"</div><div class="line">echo ""</div><div class="line">echo " &lt;body bgcolor=\"$&#123;color&#125;\"&gt;"</div><div class="line">echo "&lt;h1&gt;This is $&#123;color&#125;&lt;/h1&gt;"</div><div class="line">echo "&lt;/body&gt;"</div></pre></td></tr></table></figure>
+<p>改动完之后，我们将<code>index.html</code>中的<code>GET</code>改为<code>POST</code>，再通过浏览器访问，此时我们的shell程序已经可以完美替代color.cgi，并且还支持<code>GET</code>和<code>POST</code>方法</p>
+<h3 id="2-添加其他MIME格式"><a href="#2-添加其他MIME格式" class="headerlink" title="2 添加其他MIME格式"></a>2 添加其他MIME格式</h3><p>如果我们想通过tinyhttpd访问图片、音频或者视频，tinyhttpd支持吗？为此我们测试一下，拷贝一些图片或者音视频到<code>htdocs</code>目录下，比如说拷贝<code>123.png</code>到该目录下，然后通过浏览器访问<code>127.0.0.1::4000/123.png</code>。然后我们会发现图片显示不了，浏览器打印</p>
+<p><code>The image &quot;httpd://127.0.0.1:4000/123.png&quot; cannog be displayer because it contains errors.</code></p>
+<p>故我们知道tinyhttpd不支持其他格式的文件，为此，我们就给tinyhttpd添加相应的功能。</p>
+<p>首先，我们得先找到问题的根源在哪里，在headers函数中我们看到有这样一行</p>
+<p><code>sprintf(buf, &quot;Content-Type: text/html\r\n&quot;);</code></p>
+<p>从这里我们可以看出tinyhttpd中普通文本在发送时仅支持<code>text/html</code>格式，但是如果我们想让tinyhttpd支持更多的MIME格式要怎么做呢?对症下药，首先就是对headers函数进行更改。</p>
+<h4 id="2-1判断普通文本的文件类型"><a href="#2-1判断普通文本的文件类型" class="headerlink" title="2.1判断普通文本的文件类型"></a>2.1判断普通文本的文件类型</h4><p>首先，要判断文件的类型可以使用<code>strcasestr</code> 来判断，为此添加宏定义</p>
+<p><code>#define _GNU_SOURCE</code></p>
+<p>接下来，就是判断类型了,header函数全部代码如下所示</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">headers</span><span class="params">(<span class="keyword">int</span> client, <span class="keyword">const</span> <span class="keyword">char</span> *filename)</span></span></div><div class="line"><span class="function"></span>&#123;</div><div class="line">    <span class="keyword">char</span> buf[<span class="number">1024</span>];</div><div class="line">	<span class="keyword">char</span> type[<span class="number">1024</span>];</div><div class="line">	<span class="keyword">if</span>(strcasestr(filename, <span class="string">".html"</span>) != <span class="literal">NULL</span>)</div><div class="line">		<span class="built_in">strcpy</span>(type, <span class="string">"text/html"</span>);</div><div class="line">	<span class="keyword">else</span> <span class="keyword">if</span>(strcasestr(filename, <span class="string">".png"</span>) != <span class="literal">NULL</span>)</div><div class="line">		<span class="built_in">strcpy</span>(type, <span class="string">"image/png"</span>);</div><div class="line">	<span class="keyword">else</span> <span class="keyword">if</span>(strcasestr(filename, <span class="string">".mp3"</span>) != <span class="literal">NULL</span>)</div><div class="line">		<span class="built_in">strcpy</span>(type, <span class="string">"audio/mpeg"</span>);</div><div class="line">	<span class="keyword">else</span> <span class="keyword">if</span>(strcasestr(filename, <span class="string">".ogg"</span>) != <span class="literal">NULL</span>)</div><div class="line">		<span class="built_in">strcpy</span>(type, <span class="string">"audio/ogg"</span>);</div><div class="line"></div><div class="line">    <span class="built_in">strcpy</span>(buf, <span class="string">"HTTP/1.0 200 OK\r\n"</span>);</div><div class="line">    send(client, buf, <span class="built_in">strlen</span>(buf), <span class="number">0</span>);</div><div class="line">    <span class="built_in">strcpy</span>(buf, SERVER_STRING);</div><div class="line">    send(client, buf, <span class="built_in">strlen</span>(buf), <span class="number">0</span>);</div><div class="line">    <span class="built_in">sprintf</span>(buf, <span class="string">"Content-Type: %s\r\n"</span>, type);</div><div class="line">    send(client, buf, <span class="built_in">strlen</span>(buf), <span class="number">0</span>);</div><div class="line">    <span class="built_in">strcpy</span>(buf, <span class="string">"\r\n"</span>);</div><div class="line">    send(client, buf, <span class="built_in">strlen</span>(buf), <span class="number">0</span>);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>此时，我们去访问<code>127.0.0.1::4000/123.png</code>，我们会发现还是接受不正确，为此我们看一下服务器在发送时，<code>cat</code>函数时怎么处理的呢?</p>
+<h4 id="2-2cat函数时怎么发送的"><a href="#2-2cat函数时怎么发送的" class="headerlink" title="2.2cat函数时怎么发送的"></a>2.2cat函数时怎么发送的</h4><p>tinyhttpd中<code>cat</code>函数如下</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">cat</span><span class="params">(<span class="keyword">int</span> client, FILE *resource)</span></span></div><div class="line"><span class="function"></span>&#123;</div><div class="line">  <span class="keyword">char</span> buf[<span class="number">1024</span>];</div><div class="line">  </div><div class="line">  fgets(buf, <span class="keyword">sizeof</span>(buf), resource);</div><div class="line">  <span class="keyword">while</span>(!feof(resource))</div><div class="line">  &#123;</div><div class="line">    send(client, buf, <span class="built_in">strlen</span>(buf), <span class="number">0</span>);</div><div class="line">    fgets(buf, <span class="keyword">sizeof</span>(buf), resource);</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>分析一下，<code>fgets</code>函数在传输时是遇到’\0’或者’\n’时会结束，不读取相应的换行标识符。在文本文件中，我们使用<code>fgets</code>是可行的，不过在图片或者音视频这些中，含有很多不可见字符或者’\0’、’\n’，这些字符都是不可忽略的，如果使用fgets去读取的话，就会去掉相应的字符，导致图片访问不了。为此我们将使用<code>fread</code>替换掉<code>fgets</code>，读取全部内容。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">cat</span><span class="params">(<span class="keyword">int</span> client, FILE *resource)</span></span></div><div class="line"><span class="function"></span>&#123;</div><div class="line">  <span class="keyword">char</span> buf[<span class="number">1024</span>];</div><div class="line">  </div><div class="line">  <span class="keyword">int</span> ret = fread(buf, <span class="number">1</span>, <span class="keyword">sizeof</span>(buf), resource);</div><div class="line">  <span class="keyword">while</span>(ret &gt; <span class="number">0</span>)</div><div class="line">  &#123;</div><div class="line">    send(client, buf, ret, <span class="number">0</span>);</div><div class="line">    ret = fread(buf, <span class="number">1</span>, <span class="keyword">sizeof</span>(buf), resource);</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>此时我们访问127.0.0.1::4000/123.png，此时我们就可以访问到图片资源了。</p>
+<h3 id="3-添加获取文件列表"><a href="#3-添加获取文件列表" class="headerlink" title="3 添加获取文件列表"></a>3 添加获取文件列表</h3><p>我们知道，如果在apache服务器中，根目录下不存在<code>index.html</code>的情况下，访问apache服务器，apache服务器会返回文件列表，这样就可以实现一个简单的文件下载功能。在我们的tinyhttpd中，如果我们把htdocs中的<code>index.html</code>去掉的话,去访问<code>127.0.0.1:4000</code>，浏览器会返回</p>
+<p><code>The server could not fulfill your request because the resource specified is unavailable or nonexistent</code></p>
+<p>这说明,tinyhttpd是不支持这个功能的，接下来就让我们一步步实现这个功能</p>
+<h4 id="3-1-实现当index-html不存在时，获取目录下的文件列表"><a href="#3-1-实现当index-html不存在时，获取目录下的文件列表" class="headerlink" title="3.1 实现当index.html不存在时，获取目录下的文件列表"></a>3.1 实现当index.html不存在时，获取目录下的文件列表</h4><p>首先，我们看一下<code>accept_request</code>函数中，当路径是<code>/</code>的情况下,tinyhttpd是怎么处理的</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span>(path[<span class="built_in">strlen</span>(path) - <span class="number">1</span>] == <span class="string">'/'</span>)</div><div class="line">  <span class="built_in">strcat</span>(path, <span class="string">"index.html"</span>);</div></pre></td></tr></table></figure>
+<p>当访问的是根路径是，tinyhttpd直接将<code>path</code>指向<code>index.htm</code>,而没有判断<code>index.html</code>是否存在，为此，我们将上述代码进行改动。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span>(path[<span class="built_in">strlen</span>(path) - <span class="number">1</span>] == <span class="string">'/'</span>)</div><div class="line">&#123;</div><div class="line">  <span class="built_in">strcat</span>(path, <span class="string">"index.html"</span>);</div><div class="line">  <span class="keyword">if</span>(access(paht, F_OK) == <span class="number">-1</span>)</div><div class="line">  &#123;</div><div class="line">    <span class="built_in">strcpy</span>(path, <span class="string">"htdocs/getdirlist.sh);</span></div><div class="line"><span class="string">    cgi = 1;</span></div><div class="line"><span class="string">  &#125;</span></div><div class="line"><span class="string">&#125;</span></div></pre></td></tr></table></figure>
+<p>这段代码的意思是，如果是访问的是根目录的话，判断根目录下是否存在<code>index.html</code>，若存在，将<code>path</code>定向到<code>index.html</code>。如果不存在，则访问根目录下的<code>getdirlist.sh</code>文件。<code>getdirlist.sh</code>是我们自己编写的，其代码如下</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">echo "Content-Type: text/html; charset=ISO-8859-1"</div><div class="line">echo ""</div><div class="line"></div><div class="line">dirlist = `ls ./htdocs`</div><div class="line">for var in $&#123;dirlist&#125;</div><div class="line">do</div><div class="line">	echo "&lt;td&gt;&lt;a href=\"$&#123;var&#125;\"&gt;$&#123;var&#125;&lt;/a&gt;&lt;/td?"</div><div class="line">done</div></pre></td></tr></table></figure>
+<p>此时，我们将<code>htdocs</code>目录下的<code>index.html</code>去掉，去访问<code>127.0.0.1:4000</code>就可以看到<code>htdocs</code>目录下的文件列表了。但是，现在只实现，访问<code>htdocs</code>目录下的文件，如果该目录下有文件夹的话，点击该文件夹是无法跳转的。为此，我们继续改进。</p>
+<h4 id="3-2-让我们的getdirlish-sh支持文件夹跳转"><a href="#3-2-让我们的getdirlish-sh支持文件夹跳转" class="headerlink" title="3.2 让我们的getdirlish.sh支持文件夹跳转"></a>3.2 让我们的getdirlish.sh支持文件夹跳转</h4><p>和访问根目录一样，首先判断是否是文件夹时，判断一下该文件夹下是否含有<code>index.html</code>,存在的话，则访问，不存在的话，则打印文件列表，改动后的函数如下</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> ((st.st_mode &amp; S_IFMT) == S_IFDIR)</div><div class="line">&#123;</div><div class="line">    <span class="built_in">strcat</span>(path, <span class="string">"/index.html"</span>);</div><div class="line">	<span class="keyword">if</span>(access(path, F_OK) == <span class="number">-1</span>)</div><div class="line">	&#123;</div><div class="line">		<span class="built_in">strcpy</span>(path, <span class="string">"htdocs/getdirlist.sh"</span>);</div><div class="line">		cgi = <span class="number">1</span>;</div><div class="line">	&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>然后将<code>execute_cgi</code>重新声明为</p>
+<p><code>void execute_cgi(int, const char *, const char *, const char *, const char*);</code></p>
+<p>在使用时传递<code>url</code>过去，如</p>
+<p><code>execute_cgi(client, path, method, query_string, url);</code></p>
+<p>然后在<code>execute_cgi</code>中<code>if(pid == 0)</code>分支里面添加下面的语句，主要功能是，传递<code>url</code>的路径给环境变量</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">char</span> path_env[<span class="number">255</span>];</div><div class="line"><span class="built_in">sprintf</span>(path_env, <span class="string">"PATH_INFO=%s"</span>, url);</div><div class="line">putenv(path_env);</div></pre></td></tr></table></figure>
+<p>最后再改动我们的<code>getdirlist.sh</code></p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#</span><span class="bash">!/bin/bash</span></div><div class="line">echo "Content-Type: text/html; charset=ISO-8859-1"</div><div class="line">echo ""</div><div class="line"></div><div class="line">dirlist=`ls ./htdocs$&#123;PATH_INFO&#125;`</div><div class="line">for var in $&#123;dirlist&#125;</div><div class="line">do</div><div class="line">	echo "&lt;td&gt;&lt;a href=\"$&#123;var&#125;\"&gt;$&#123;var&#125;&lt;/a&gt;&lt;/td&gt;"</div><div class="line">done</div></pre></td></tr></table></figure>
+<p>此时我们的<code>getdirlist.sh</code>就支持文件跳转功能了，此时基本的文件夹跳转功能就实现了。</p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
+	<div class="article-tag tagcloud">
+		<i class="icon-price-tags icon"></i>
+		<ul class="article-tag-list">
+			 
+        		<li class="article-tag-list-item">
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">linux</a>
+        		</li>
+      		
+		</ul>
+	</div>
+
+      
+
+      
+        <p class="article-more-link">
+          <a class="article-more-a" href="/2017/09/03/基于tinyhttpd的测试与功能扩展/">展开全文 >></a>
+        </p>
+      
+
+      
+      <div class="clearfix"></div>
+    </div>
+  </div>
+</article>
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
+        </div>
+        
+        
+    </div>
+</aside>
+
+
+
+
+  
     <article id="post-test-my-site" class="article article-type-post  article-index" itemscope itemprop="blogPost">
   <div class="article-inner">
     
@@ -351,6 +488,10 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
             <input type="checkbox" q-on="click:toggleTag(e)" q-attr="checked:showTags">
           </label>
           <ul class="article-tag-list" q-show="showTags">
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">linux</a>
+              </li>
             
             <div class="clearfix"></div>
           </ul>
